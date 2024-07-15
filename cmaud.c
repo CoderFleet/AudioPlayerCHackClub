@@ -1,5 +1,9 @@
 #include <SDL2/SDL.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <dirent.h>
+#include <string.h>
+#include <stdbool.h>
 
 void printWelcomeMessage() {
     printf("░█████╗░███╗░░░███╗░█████╗░██╗░░░██╗██████╗░\n");
@@ -50,14 +54,14 @@ void displayPlaybackStatus(AudioData* audio, SDL_AudioDeviceID deviceId) {
     int volume;
     SDL_GetAudioDeviceVolume(deviceId, &volume);
 
-    printf("\033[2J\033[H"); // Found This On Internet XD
-    printf("Now playing: %s\n", argv[1]);
+    printf("\033[2J\033[H");
     printf("Press 'q' to quit\n");
     printf("Use arrow keys (< and >) to adjust volume\n");
     printf("Press 'p' to pause/resume playback\n");
     printf("Press 's' to stop playback\n");
     printf("Press 'm' to toggle mute\n");
     printf("Press 'l' to toggle loop playback\n");
+    printf("Press 'f' to select a new audio file\n");
 
     if (audio->muted) {
         printf("Muted\n");
@@ -70,6 +74,29 @@ void displayPlaybackStatus(AudioData* audio, SDL_AudioDeviceID deviceId) {
     printf("Looping: %s\n", audio->looping ? "Enabled" : "Disabled");
 }
 
+void listAudioFiles() {
+    DIR* dir;
+    struct dirent* entry;
+    dir = opendir(".");
+    if (dir == NULL) {
+        printf("Could not open current directory.\n");
+        return;
+    }
+
+    printf("Available audio files:\n");
+    while ((entry = readdir(dir)) != NULL) {
+        if (strstr(entry->d_name, ".wav") != NULL) {
+            printf("%s\n", entry->d_name);
+        }
+    }
+    closedir(dir);
+}
+
+void selectAudioFile(char* filename) {
+    printf("Enter the filename of the audio file to play: ");
+    scanf("%s", filename);
+}
+
 int main(int argc, char* argv[]) {
     printWelcomeMessage();
 
@@ -78,10 +105,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    char filename[256];
     if (argc < 2) {
-        printf("Usage: %s <audio_file>\n", argv[0]);
-        SDL_Quit();
-        return 1;
+        listAudioFiles();
+        selectAudioFile(filename);
+    } else {
+        strcpy(filename, argv[1]);
     }
 
     SDL_AudioSpec wavSpec;
@@ -98,8 +127,8 @@ int main(int argc, char* argv[]) {
 
     SDL_AudioDeviceID deviceId = 0;
 
-    if (SDL_LoadWAV(argv[1], &wavSpec, &wavBuffer, &wavLength) == NULL) {
-        printf("Failed to load WAV file '%s'! SDL_Error: %s\n", argv[1], SDL_GetError());
+    if (SDL_LoadWAV(filename, &wavSpec, &wavBuffer, &wavLength) == NULL) {
+        printf("Failed to load WAV file '%s'! SDL_Error: %s\n", filename, SDL_GetError());
         SDL_Quit();
         return 1;
     }
@@ -205,10 +234,41 @@ int main(int argc, char* argv[]) {
                             printf("Looping disabled\n");
                         }
                         break;
+                    case SDLK_f:
+                        SDL_CloseAudioDevice(deviceId);
+                        SDL_FreeWAV(audio.buffer);
+                        audio.buffer = NULL;
+                        audio.length = 0;
+                        audio.position = 0;
+
+                        listAudioFiles();
+                        selectAudioFile(filename);
+
+                        if (SDL_LoadWAV(filename, &wavSpec, &wavBuffer, &wavLength) == NULL) {
+                            printf("Failed to load WAV file '%s'! SDL_Error: %s\n", filename, SDL_GetError());
+                            SDL_Quit();
+                            return 1;
+                        }
+
+                        audio.buffer = wavBuffer;
+                        audio.length = wavLength;
+
+                        wavSpec.callback = audioCallback;
+                        wavSpec.userdata = &audio;
+
+                        deviceId = SDL_OpenAudioDevice(NULL, 0, &wavSpec, NULL, SDL_AUDIO_ALLOW_ANY_CHANGE);
+                        if (deviceId == 0) {
+                            printf("Failed to open audio device! SDL_Error: %s\n", SDL_GetError());
+                            SDL_FreeWAV(audio.buffer);
+                            SDL_Quit();
+                            return 1;
+                        }
+
+                        SDL_PauseAudioDevice(deviceId, 0);
+                        break;
                 }
                 break;
         }
-
         SDL_Delay(100);
     }
 

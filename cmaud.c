@@ -15,12 +15,17 @@ typedef struct {
     Uint8* buffer;
     Uint32 length;
     Uint32 position;
+    bool looping;
 } AudioData;
 
 void audioCallback(void* userdata, Uint8* stream, int len) {
     AudioData* audio = (AudioData*)userdata;
     if (audio->position == audio->length) {
-        return;
+        if (audio->looping) {
+            audio->position = 0;
+        } else {
+            return;
+        }
     }
 
     Uint32 remaining = audio->length - audio->position;
@@ -49,6 +54,7 @@ int main(int argc, char* argv[]) {
     audio.buffer = NULL;
     audio.length = 0;
     audio.position = 0;
+    audio.looping = false;
 
     SDL_AudioDeviceID deviceId = 0;
 
@@ -62,12 +68,14 @@ int main(int argc, char* argv[]) {
     printf("  '>' - Increase volume\n");
     printf("  Left Arrow  - Seek backward 5 seconds\n");
     printf("  Right Arrow - Seek forward 5 seconds\n");
+    printf("  'm' - Mute/Unmute audio\n");
+    printf("  'l' - Toggle loop playback\n");
 
     SDL_Event event;
     bool quit = false;
     bool paused = false;
+    bool muted = false;
     int volume = SDL_MIX_MAXVOLUME / 2;
-
     while (!quit) {
         SDL_PollEvent(&event);
         switch (event.type) {
@@ -156,6 +164,24 @@ int main(int argc, char* argv[]) {
                         } else {
                             audio.position = audio.length;
                             printf("Seeking to end of audio\n");
+                        }
+                        break;
+                    case SDLK_m:
+                        muted = !muted;
+                        if (muted) {
+                            SDL_SetAudioDeviceVolume(deviceId, 0);
+                            printf("Audio muted\n");
+                        } else {
+                            SDL_SetAudioDeviceVolume(deviceId, volume);
+                            printf("Audio unmuted\n");
+                        }
+                        break;
+                    case SDLK_l:
+                        audio.looping = !audio.looping;
+                        if (audio.looping) {
+                            printf("Looping enabled\n");
+                        } else {
+                            printf("Looping disabled\n");
                         }
                         break;
                 }

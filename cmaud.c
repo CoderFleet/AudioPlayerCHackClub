@@ -41,53 +41,88 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (argc < 2) {
-        printf("Usage: %s <audio_file>\n", argv[0]);
-        SDL_Quit();
-        return 1;
-    }
-
     SDL_AudioSpec wavSpec;
     Uint32 wavLength;
     Uint8 *wavBuffer;
 
-    if (SDL_LoadWAV(argv[1], &wavSpec, &wavBuffer, &wavLength) == NULL) {
-        printf("Failed to load WAV! SDL_Error: %s\n", SDL_GetError());
-        SDL_Quit();
-        return 1;
-    }
-
     AudioData audio;
-    audio.buffer = wavBuffer;
-    audio.length = wavLength;
+    audio.buffer = NULL;
+    audio.length = 0;
     audio.position = 0;
 
-    wavSpec.callback = audioCallback;
-    wavSpec.userdata = &audio;
+    SDL_AudioDeviceID deviceId = 0;
 
-    SDL_AudioDeviceID deviceId = SDL_OpenAudioDevice(NULL, 0, &wavSpec, NULL, SDL_AUDIO_ALLOW_ANY_CHANGE);
-    if (deviceId == 0) {
-        printf("Failed to open audio device! SDL_Error: %s\n", SDL_GetError());
-        SDL_FreeWAV(wavBuffer);
-        SDL_Quit();
-        return 1;
-    }
+    printf("Usage:\n");
+    printf("  %s <audio_file> - Play the specified audio file\n", argv[0]);
+    printf("Controls:\n");
+    printf("  'q' - Quit\n");
+    printf("  'p' - Pause/Resume playback\n");
+    printf("  's' - Select a new audio file\n");
+    printf("  '<' - Decrease volume\n");
+    printf("  '>' - Increase volume\n");
 
-    SDL_PauseAudioDevice(deviceId, 0);
-
-    printf("\nPress 'q' to quit\n");
-    printf("Use arrow keys (< and >) to adjust volume\n");
-
-    int volume = SDL_MIX_MAXVOLUME;
     SDL_Event event;
-    while (audio.position < audio.length) {
+    bool quit = false;
+    bool paused = false;
+    int volume = SDL_MIX_MAXVOLUME / 2;
+
+    while (!quit) {
         SDL_PollEvent(&event);
         switch (event.type) {
             case SDL_KEYDOWN:
                 switch (event.key.keysym.sym) {
                     case SDLK_q:
                         printf("Exiting...\n");
-                        audio.position = audio.length;
+                        quit = true;
+                        break;
+                    case SDLK_p:
+                        paused = !paused;
+                        if (paused) {
+                            SDL_PauseAudioDevice(deviceId, 1);
+                            printf("Playback paused\n");
+                        } else {
+                            SDL_PauseAudioDevice(deviceId, 0);
+                            printf("Playback resumed\n");
+                        }
+                        break;
+                    case SDLK_s:
+                        if (audio.buffer != NULL) {
+                            SDL_FreeWAV(audio.buffer);
+                            audio.buffer = NULL;
+                            audio.length = 0;
+                            audio.position = 0;
+                        }
+                        if (argc < 2) {
+                            printf("Usage: %s <audio_file>\n", argv[0]);
+                            break;
+                        }
+                        if (SDL_LoadWAV(argv[1], &wavSpec, &wavBuffer, &wavLength) == NULL) {
+                            printf("Failed to load WAV! SDL_Error: %s\n", SDL_GetError());
+                            break;
+                        }
+                        audio.buffer = wavBuffer;
+                        audio.length = wavLength;
+                        audio.position = 0;
+                        paused = false;
+
+                        if (deviceId != 0) {
+                            SDL_CloseAudioDevice(deviceId);
+                        }
+
+                        wavSpec.callback = audioCallback;
+                        wavSpec.userdata = &audio;
+                        deviceId = SDL_OpenAudioDevice(NULL, 0, &wavSpec, NULL, SDL_AUDIO_ALLOW_ANY_CHANGE);
+                        if (deviceId == 0) {
+                            printf("Failed to open audio device! SDL_Error: %s\n", SDL_GetError());
+                            SDL_FreeWAV(audio.buffer);
+                            audio.buffer = NULL;
+                            audio.length = 0;
+                            audio.position = 0;
+                            break;
+                        }
+                        SDL_PauseAudioDevice(deviceId, 0);
+
+                        printf("Now playing: %s\n", argv[1]);
                         break;
                     case SDLK_COMMA:
                         if (volume > 0) {
@@ -110,7 +145,7 @@ int main(int argc, char* argv[]) {
     }
 
     SDL_CloseAudioDevice(deviceId);
-    SDL_FreeWAV(wavBuffer);
+    SDL_FreeWAV(audio.buffer);
     SDL_Quit();
     return 0;
 }

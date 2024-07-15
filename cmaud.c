@@ -189,7 +189,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (audio.length > 0) {
-            printf("Playback Position: %.2f seconds / Total Duration: %.2f seconds\n",
+            printf("Playback Position: %.2f s / Total Duration: %.2f s\n",
                 (float)audio.position / 1000, (float)audio.length / 1000);
         }
 

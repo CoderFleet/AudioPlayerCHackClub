@@ -60,6 +60,8 @@ int main(int argc, char* argv[]) {
     printf("  's' - Select a new audio file\n");
     printf("  '<' - Decrease volume\n");
     printf("  '>' - Increase volume\n");
+    printf("  Left Arrow  - Seek backward 5 seconds\n");
+    printf("  Right Arrow - Seek forward 5 seconds\n");
 
     SDL_Event event;
     bool quit = false;
@@ -138,9 +140,33 @@ int main(int argc, char* argv[]) {
                             printf("Volume: %d%%\n", volume * 100 / SDL_MIX_MAXVOLUME);
                         }
                         break;
+                    case SDLK_LEFT:
+                        if (audio.position >= 5000) {
+                            audio.position -= 5000;
+                            printf("Seeking backward 5 seconds\n");
+                        } else {
+                            audio.position = 0;
+                            printf("Seeking to start of audio\n");
+                        }
+                        break;
+                    case SDLK_RIGHT:
+                        if (audio.position + 5000 <= audio.length) {
+                            audio.position += 5000;
+                            printf("Seeking forward 5 seconds\n");
+                        } else {
+                            audio.position = audio.length;
+                            printf("Seeking to end of audio\n");
+                        }
+                        break;
                 }
                 break;
         }
+
+        if (audio.length > 0) {
+            printf("Playback Position: %.2f seconds / Total Duration: %.2f seconds\n",
+                (float)audio.position / 1000, (float)audio.length / 1000);
+        }
+
         SDL_Delay(100);
     }
 

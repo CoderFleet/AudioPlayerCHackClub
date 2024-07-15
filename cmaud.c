@@ -25,7 +25,7 @@ void audioCallback(void* userdata, Uint8* stream, int len) {
 
     Uint32 remaining = audio->length - audio->position;
     Uint32 length = (len > remaining) ? remaining : len;
-    SDL_memcpy(stream, audio->buffer + audio->position, length);
+    SDL_MixAudioFormat(stream, audio->buffer + audio->position, AUDIO_S8, length, SDL_MIX_MAXVOLUME);
     audio->position += length;
 
     if (length < len) {
@@ -65,20 +65,52 @@ int main(int argc, char* argv[]) {
     wavSpec.callback = audioCallback;
     wavSpec.userdata = &audio;
 
-    if (SDL_OpenAudio(&wavSpec, NULL) < 0) {
-        printf("SDL_OpenAudio failed! SDL_Error: %s\n", SDL_GetError());
+    SDL_AudioDeviceID deviceId = SDL_OpenAudioDevice(NULL, 0, &wavSpec, NULL, SDL_AUDIO_ALLOW_ANY_CHANGE);
+    if (deviceId == 0) {
+        printf("Failed to open audio device! SDL_Error: %s\n", SDL_GetError());
         SDL_FreeWAV(wavBuffer);
         SDL_Quit();
         return 1;
     }
 
-    SDL_PauseAudio(0);
+    SDL_PauseAudioDevice(deviceId, 0);
+
+    printf("\nPress 'q' to quit\n");
+    printf("Use arrow keys (< and >) to adjust volume\n");
+
+    int volume = SDL_MIX_MAXVOLUME;
+    SDL_Event event;
     while (audio.position < audio.length) {
+        SDL_PollEvent(&event);
+        switch (event.type) {
+            case SDL_KEYDOWN:
+                switch (event.key.keysym.sym) {
+                    case SDLK_q:
+                        printf("Exiting...\n");
+                        audio.position = audio.length;
+                        break;
+                    case SDLK_COMMA:
+                        if (volume > 0) {
+                            volume -= SDL_MIX_MAXVOLUME / 10;
+                            SDL_SetAudioDeviceVolume(deviceId, volume);
+                            printf("Volume: %d%%\n", volume * 100 / SDL_MIX_MAXVOLUME);
+                        }
+                        break;
+                    case SDLK_PERIOD:
+                        if (volume < SDL_MIX_MAXVOLUME) {
+                            volume += SDL_MIX_MAXVOLUME / 10;
+                            SDL_SetAudioDeviceVolume(deviceId, volume);
+                            printf("Volume: %d%%\n", volume * 100 / SDL_MIX_MAXVOLUME);
+                        }
+                        break;
+                }
+                break;
+        }
         SDL_Delay(100);
     }
 
+    SDL_CloseAudioDevice(deviceId);
     SDL_FreeWAV(wavBuffer);
-    SDL_CloseAudio();
     SDL_Quit();
     return 0;
 }
